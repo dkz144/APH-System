@@ -1,0 +1,96 @@
+import React, { useState } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Alert, TextInput, ActivityIndicator } from 'react-native';
+import * as Location from 'expo-location';
+
+// >>> Ajuste para o backend
+const API_BASE = 'http://10.0.2.2:4000'; // Emulador Android
+// Em celular físico na mesma Wi-Fi, troque pelo IP da máquina, ex: http://192.168.0.10:4000
+
+export default function App() {
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const sendOccurrence = async (serviceType) => {
+    try {
+      setLoading(true);
+      // Permissão de localização
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permissão negada', 'Precisamos da localização para enviar a emergência.');
+        setLoading(false);
+        return;
+      }
+
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = pos.coords;
+
+      const body = {
+        serviceType,
+        lat: latitude,
+        lng: longitude,
+        message: message.trim(),
+        audioUrl: "" // Futuro: enviar áudio
+      };
+
+      const res = await fetch(`${API_BASE}/api/occurrences`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Erro ao enviar ocorrência');
+      }
+
+      Alert.alert('Enviado', 'Ocorrência enviada com sucesso!');
+      setMessage('');
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Erro', e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Emergência Rápida</Text>
+      <Text style={styles.subtitle}>Escolha o serviço e descreva a situação</Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="Digite uma breve descrição (opcional)"
+        multiline
+        value={message}
+        onChangeText={setMessage}
+      />
+
+      <TouchableOpacity style={[styles.btn, styles.police]} onPress={() => sendOccurrence('police')} disabled={loading}>
+        <Text style={styles.btnText}>🚓 Polícia</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={[styles.btn, styles.ambulance]} onPress={() => sendOccurrence('ambulance')} disabled={loading}>
+        <Text style={styles.btnText}>🚑 Ambulância</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={[styles.btn, styles.fire]} onPress={() => sendOccurrence('fire')} disabled={loading}>
+        <Text style={styles.btnText}>🚒 Bombeiros</Text>
+      </TouchableOpacity>
+
+      {loading && <ActivityIndicator size="large" style={{ marginTop: 16 }} />}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 24, alignItems: 'stretch', justifyContent: 'center' },
+  title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
+  subtitle: { fontSize: 14, textAlign: 'center', marginBottom: 16 },
+  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, minHeight: 80, marginBottom: 16 },
+  btn: { padding: 18, borderRadius: 12, alignItems: 'center', marginVertical: 6 },
+  btnText: { color: '#fff', fontSize: 18, fontWeight: '600' },
+  police: { backgroundColor: '#1f57ff' },
+  ambulance: { backgroundColor: '#e11d48' },
+  fire: { backgroundColor: '#ea580c' }
+});
